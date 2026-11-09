@@ -1,0 +1,34 @@
+# Checks a pull request to the index: the fields, then every added or changed
+# entry (downloads the zip, compares the SHA-256, runs `spellsheet plugin
+# check`). What each entry is goes to the job summary for the reviewer.
+name: Check
+on:
+  pull_request:
+  push:
+    branches: [main]
+permissions:
+  contents: read
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Install the SpellSheet CLI
+        run: |
+          sudo apt-get update -q && sudo apt-get install -yq unixodbc-dev
+          cargo install --locked --git https://github.com/spellsheet/spellsheet spellsheet-cli
+      - name: Index of the base branch
+        if: github.event_name == 'pull_request'
+        run: git show "origin/${{ github.base_ref }}:index.json" > "$RUNNER_TEMP/base.json" || echo '{"extensions":[]}' > "$RUNNER_TEMP/base.json"
+      - name: Check
+        run: |
+          if [ -f "$RUNNER_TEMP/base.json" ]; then
+            node scripts/check.mjs --base "$RUNNER_TEMP/base.json"
+          else
+            node scripts/check.mjs
+          fi
